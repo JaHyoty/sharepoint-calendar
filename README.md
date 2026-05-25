@@ -4,6 +4,10 @@ A premium, fully self-contained, responsive client-side web application (`SPCale
 
 Built entirely with modern Vanilla HTML, CSS, and JavaScript, it integrates seamlessly with SharePoint using the native REST API, requiring **zero** compilation, **zero** external library dependencies, and a simple one-time custom script activation by an administrator.
 
+<img src="images/Improved_Calendar_Design.png" alt="Improved Modern Timeline Calendar Design" />
+<br />
+<em>Stunning custom Gantt-like timeline layout with direct SharePoint list integration.</em>
+
 ---
 
 ## 🌟 Key Features
@@ -48,7 +52,7 @@ An administrator must enable Custom Scripts for the target SharePoint site from 
 > [!NOTE]
 > SharePoint automatically turns custom scripts off again after 24–48 hours for security. This is perfectly fine! The scripting permission is only required during the file upload/creation step; the page will continue to run normally after it has been uploaded.
 
-![SharePoint Enable Custom Scripts Setting](SharePoint_Enable_Scripts_Setting.png)
+<img src="images/SharePoint_Enable_Scripts_Setting.png" width="480" alt="SharePoint Enable Custom Scripts Setting" />
 
 ### 2. Upload to SharePoint
 1. Download or clone this repository and locate the [SPCalendar.aspx](SPCalendar.aspx) file.
@@ -68,7 +72,17 @@ An administrator must enable Custom Scripts for the target SharePoint site from 
    * **Regular:** Descriptive text block.
 6. Click **Save Configuration**. Your calendar is now fully functional!
 
-<img src="Calendar_Design.png" width="480" alt="Timeline Calendar View Design" />
+<img src="images/Setup_Screen1.png" width="480" alt="Select SharePoint List in Setup Wizard" />
+<br />
+<em>The guided wizard automatically detects the lists on your SharePoint site.</em>
+
+<img src="images/Setup_Screen2.png" width="480" alt="Map List Columns to Timeline Fields" />
+<br />
+<em>Map visual calendar fields (heading, subheading, badges, description) directly to your list columns.</em>
+
+<img src="images/Setup_Screen3.png" width="480" alt="Confirm Settings in Setup Wizard" />
+<br />
+<em>Review the mapped visual parameters and click "Save Configuration" to generate your timeline.</em>
 
 ### 4. Embed on a Page (Optional)
 1. Click the **Embed** `</>` button in the calendar header.
@@ -77,7 +91,7 @@ An administrator must enable Custom Scripts for the target SharePoint site from 
 4. Add the **Embed Web Part** to your section.
 5. Paste the iframe code. The calendar automatically detects embed mode, hiding the top header to fit seamlessly into your page!
 
-<img src="Calendar_Embedded.png" width="480" alt="Calendar Embedded in SharePoint Page" />
+<img src="images/Calendar_Embedded.png" width="480" alt="Calendar Embedded in SharePoint Page" />
 
 ---
 
