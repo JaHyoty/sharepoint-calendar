@@ -455,8 +455,8 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 }
 .calendar-day-cell.weekend { background: var(--color-bg-tertiary); }
 .calendar-day-cell.today {
-  background: var(--color-primary-light);
-  color: var(--color-primary);
+  background: var(--color-primary) !important;
+  color: var(--color-text-inverse) !important;
   font-weight: 700;
 }
 
@@ -480,7 +480,7 @@ body { display: flex; flex-direction: column; overflow: hidden; }
   height: 100%;
 }
 .calendar-grid-line.weekend { background: var(--color-bg-tertiary); opacity: 0.3; }
-.calendar-grid-line.today { background: var(--color-primary-light); opacity: 0.2; }
+.calendar-grid-line.today { background: var(--color-primary-light); opacity: 0.35; }
 
 /* Calendar Blocks */
 .calendar-block {
@@ -962,6 +962,138 @@ body { display: flex; flex-direction: column; overflow: hidden; }
     display: none !important;
   }
 }
+
+/* ===== Month Grid View (Week Rows) ===== */
+.calendar-scroll-wrapper.view-month {
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+.calendar-scroll-wrapper.view-month #calendarMonthHeader {
+  display: none !important;
+}
+.calendar-scroll-wrapper.view-month #calendarDayHeader {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  width: 100%;
+  min-width: 600px;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  border-bottom: 1px solid var(--color-border-strong);
+}
+.calendar-scroll-wrapper.view-month .calendar-day-name-cell {
+  padding: 8px 4px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  background: var(--color-bg-secondary);
+  border-right: 1px solid var(--color-border);
+}
+.calendar-scroll-wrapper.view-month .calendar-day-name-cell:last-child {
+  border-right: none;
+}
+.calendar-scroll-wrapper.view-month .calendar-day-name-cell.weekend {
+  background: var(--color-bg-tertiary);
+}
+
+.calendar-scroll-wrapper.view-month #calendarBody {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-width: 600px;
+  min-height: 100%;
+  position: relative;
+}
+.calendar-scroll-wrapper.view-month #calendarGridLines {
+  display: none !important;
+}
+
+/* Week Row container */
+.week-row {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  border-bottom: 1px solid var(--color-border);
+  min-height: 120px;
+  background: var(--color-surface);
+  flex: 1;
+}
+.week-row:last-child {
+  border-bottom: none;
+}
+
+/* 7-day Background cell grid */
+.week-grid-days {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.week-day-cell {
+  border-right: 1px solid var(--color-border);
+  height: 100%;
+  position: relative;
+  pointer-events: auto;
+}
+.week-day-cell:last-child {
+  border-right: none;
+}
+.week-day-cell.weekend {
+  background: var(--color-bg-secondary);
+  opacity: 0.5;
+}
+.week-day-cell.today {
+  background: var(--color-primary-light);
+  box-shadow: inset 0 0 0 2px var(--color-primary);
+}
+.week-day-cell.outside-month {
+  background: var(--color-bg-secondary);
+  opacity: 0.35;
+}
+
+/* Day Number Label */
+.day-number-container {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+.day-number-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+}
+.week-day-cell.today .day-number-label {
+  background: var(--color-primary);
+  color: var(--color-text-inverse);
+  box-shadow: var(--shadow-sm);
+}
+.week-day-cell.outside-month .day-number-label {
+  color: var(--color-text-tertiary);
+}
+
+/* Week Events stack container */
+.week-events-container {
+  margin-top: 28px;
+  margin-bottom: 4px;
+  position: relative;
+  flex-grow: 1;
+}
+.week-events-container .calendar-block {
+  position: absolute;
+  box-sizing: border-box;
+}
 </style>
 </head>
 <body>
@@ -1020,6 +1152,10 @@ body { display: flex; flex-direction: column; overflow: hidden; }
         <button id="btnNextMonth" class="btn-icon" title="Next month">&#9654;</button>
       </div>
       <div id="dateRangeLabel" class="date-range-label"></div>
+      <div class="view-group" style="margin-left: auto; display: flex; gap: 4px;">
+        <button id="btnViewMonthGrid" class="btn btn-ghost btn-sm" title="Month Grid View">Month</button>
+        <button id="btnViewTimeline" class="btn btn-ghost btn-sm" title="Timeline Gantt View">Timeline</button>
+      </div>
     </div>
     <div id="calendarScrollWrapper" class="calendar-scroll-wrapper">
       <div id="calendarMonthHeader" class="calendar-month-header"></div>
@@ -1057,6 +1193,7 @@ body { display: flex; flex-direction: column; overflow: hidden; }
   'use strict';
 
   // ===== State =====
+  var savedView = localStorage.getItem('SPCalendar_PreferredView');
   var APP = {
     config: null,          // { listUrl, siteUrl, listTitle, listId, fieldMappings, startDateField, endDateField, pageTitle, entityType }
     items: [],             // SharePoint list items
@@ -1071,7 +1208,8 @@ body { display: flex; flex-direction: column; overflow: hidden; }
     pollTimerList: null,
     lastCSVLength: 0,
     saving: false,
-    addingDatesForId: null  // Item ID currently in "add to calendar" date pick mode
+    addingDatesForId: null, // Item ID currently in "add to calendar" date pick mode
+    currentView: savedView === 'timeline' ? 'timeline' : 'month' // Default is 'month'
   };
 
   var DAY_MS = 86400000;
@@ -1080,6 +1218,54 @@ body { display: flex; flex-direction: column; overflow: hidden; }
   var BLOCK_GAP = 4;
   var BLOCK_TOP_OFFSET = 4;
   var STYLE_ORDER = { heading: 0, subheading: 1, regular: 2, label: 3 };
+
+  // Locale-aware helpers
+  function getLocaleFirstDayOfWeek() {
+    try {
+      var locale = navigator.language || 'en-US';
+      if (typeof Intl !== 'undefined' && Intl.Locale) {
+        var loc = new Intl.Locale(locale);
+        var firstDay = null;
+        if (loc.weekInfo && typeof loc.weekInfo.firstDay === 'number') {
+          firstDay = loc.weekInfo.firstDay;
+        } else if (typeof loc.getWeekInfo === 'function') {
+          var info = loc.getWeekInfo();
+          if (info && typeof info.firstDay === 'number') {
+            firstDay = info.firstDay;
+          }
+        }
+        if (firstDay !== null) {
+          return firstDay === 7 ? 0 : firstDay;
+        }
+      }
+    } catch (e) {
+      console.warn('Error reading Intl.Locale weekInfo:', e);
+    }
+
+    var lang = (navigator.language || 'en-US').toLowerCase();
+    var country = lang.split('-')[1] || lang;
+    var sundayCountries = ['us', 'ca', 'mx', 'jp', 'br', 'in', 'kr', 'au', 'nz', 'il', 'za', 'ph', 'sg', 'hk'];
+    if (sundayCountries.indexOf(country) !== -1) {
+      return 0; // Sunday
+    }
+    return 1; // Monday (default)
+  }
+
+  function getLocaleWeekdayNames() {
+    try {
+      var locale = navigator.language || 'en-US';
+      var formatter = new Intl.DateTimeFormat(locale, { weekday: 'short', timeZone: 'UTC' });
+      var names = [];
+      // Day 0 in UTC for standard date: 2026-05-24 is Sunday
+      for (var i = 0; i < 7; i++) {
+        var d = new Date(Date.UTC(2026, 4, 24 + i));
+        names.push(formatter.format(d));
+      }
+      return names;
+    } catch (e) {
+      return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    }
+  }
 
   // Central function to format any field value for display
   function formatFieldValue(val) {
@@ -2209,6 +2395,40 @@ body { display: flex; flex-direction: column; overflow: hidden; }
   }
 
   // ===== Main Application =====
+  // ===== Main Application =====
+  function setView(view) {
+    APP.currentView = view;
+    localStorage.setItem('SPCalendar_PreferredView', view);
+
+    var btnMonth = el('btnViewMonthGrid');
+    var btnTimeline = el('btnViewTimeline');
+    if (btnMonth && btnTimeline) {
+      if (view === 'month') {
+        btnMonth.className = 'btn btn-primary btn-sm';
+        btnTimeline.className = 'btn btn-ghost btn-sm';
+      } else {
+        btnMonth.className = 'btn btn-ghost btn-sm';
+        btnTimeline.className = 'btn btn-primary btn-sm';
+      }
+    }
+
+    var start = APP.calendarStartDate || new Date();
+    if (view === 'month') {
+      APP.calendarStartDate = new Date(start.getFullYear(), start.getMonth(), 1);
+      APP.calendarEndDate = new Date(start.getFullYear(), start.getMonth() + 1, 0);
+    } else {
+      APP.calendarStartDate = new Date(start.getFullYear(), start.getMonth(), 1);
+      APP.calendarEndDate = new Date(start.getFullYear(), start.getMonth() + 2, 0);
+    }
+
+    renderCalendar();
+    renderCards();
+
+    if (view === 'timeline') {
+      scrollToToday();
+    }
+  }
+
   function launchApp() {
     el('pageTitle').textContent = APP.config.pageTitle;
     document.title = APP.config.pageTitle;
@@ -2220,21 +2440,42 @@ body { display: flex; flex-direction: column; overflow: hidden; }
       el('pageHeader').classList.add('embed-mode');
     }
 
-    // Set initial calendar range: complete months, then auto-scroll to today
+    // Set initial calendar range: complete month(s) based on current view
     var now = new Date();
-    APP.calendarStartDate = new Date(now.getFullYear(), now.getMonth(), 1);
-    APP.calendarEndDate = new Date(now.getFullYear(), now.getMonth() + 2, 0); // end of next month
+    if (APP.currentView === 'month') {
+      APP.calendarStartDate = new Date(now.getFullYear(), now.getMonth(), 1);
+      APP.calendarEndDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    } else {
+      APP.calendarStartDate = new Date(now.getFullYear(), now.getMonth(), 1);
+      APP.calendarEndDate = new Date(now.getFullYear(), now.getMonth() + 2, 0); // end of next month
+    }
+
+    // Update active button state
+    var btnMonth = el('btnViewMonthGrid');
+    var btnTimeline = el('btnViewTimeline');
+    if (btnMonth && btnTimeline) {
+      if (APP.currentView === 'month') {
+        btnMonth.className = 'btn btn-primary btn-sm';
+        btnTimeline.className = 'btn btn-ghost btn-sm';
+      } else {
+        btnMonth.className = 'btn btn-ghost btn-sm';
+        btnTimeline.className = 'btn btn-primary btn-sm';
+      }
+    }
 
     loadItems().then(function () {
       APP._lastItemsFingerprint = itemsFingerprint();
       renderCalendar();
       renderCards();
       startPolling();
-      scrollToToday();
+      if (APP.currentView === 'timeline') {
+        scrollToToday();
+      }
     });
   }
 
   function scrollToToday() {
+    if (APP.currentView !== 'timeline') return;
     // Auto-scroll so today is visible with 3 days before it
     var now = new Date();
     var dayOffset = daysBetween(APP.calendarStartDate, now);
@@ -2311,68 +2552,333 @@ body { display: flex; flex-direction: column; overflow: hidden; }
     });
   }
 
+  // Helper to clear dynamically rendered elements from calendarBody without wiping grid lines
+  function clearCalendarBodyDynamicElements() {
+    var calBody = el('calendarBody');
+    if (!calBody) return;
+    calBody.querySelectorAll('.week-row').forEach(function (r) { r.remove(); });
+    calBody.querySelectorAll('.calendar-block').forEach(function (b) { b.remove(); });
+  }
+
+  // ===== Calendar Rendering =====
   // ===== Calendar Rendering =====
   function renderCalendar() {
     var start = APP.calendarStartDate;
     var end = APP.calendarEndDate;
-    var totalDays = daysBetween(start, end) + 1;
     var today = new Date();
 
-    // Update range label
-    el('dateRangeLabel').textContent = MONTH_FULL[start.getMonth()] + ' ' + start.getFullYear() +
-      ' - ' + MONTH_FULL[end.getMonth()] + ' ' + end.getFullYear();
-
-    // Month header
-    var monthHeader = el('calendarMonthHeader');
-    clearEl(monthHeader);
-    var curMonth = -1;
-    var monthStartIdx = 0;
-    var months = [];
-    for (var d = 0; d < totalDays; d++) {
-      var date = addDays(start, d);
-      var m = date.getMonth();
-      if (m !== curMonth) {
-        if (curMonth !== -1) {
-          months.push({ label: MONTH_NAMES[curMonth] + ' ' + addDays(start, monthStartIdx).getFullYear(), span: d - monthStartIdx });
-        }
-        curMonth = m;
-        monthStartIdx = d;
+    // Toggle view classes on the scroll wrapper
+    var scrollWrapper = el('calendarScrollWrapper');
+    if (scrollWrapper) {
+      if (APP.currentView === 'month') {
+        scrollWrapper.classList.remove('view-timeline');
+        scrollWrapper.classList.add('view-month');
+      } else {
+        scrollWrapper.classList.remove('view-month');
+        scrollWrapper.classList.add('view-timeline');
       }
     }
-    months.push({ label: MONTH_NAMES[curMonth] + ' ' + addDays(start, monthStartIdx).getFullYear(), span: totalDays - monthStartIdx });
 
-    months.forEach(function (mo) {
-      var cell = create('div', { className: 'calendar-month-cell', textContent: mo.label });
-      cell.style.width = (mo.span * CELL_WIDTH) + 'px';
-      cell.style.minWidth = cell.style.width;
-      monthHeader.appendChild(cell);
-    });
+    // Update range label: show just Month Year if spanning exactly 1 month
+    if (start.getMonth() === end.getMonth() && start.getFullYear() === end.getFullYear()) {
+      el('dateRangeLabel').textContent = MONTH_FULL[start.getMonth()] + ' ' + start.getFullYear();
+    } else {
+      el('dateRangeLabel').textContent = MONTH_FULL[start.getMonth()] + ' ' + start.getFullYear() +
+        ' - ' + MONTH_FULL[end.getMonth()] + ' ' + end.getFullYear();
+    }
 
-    // Day header
+    if (APP.currentView === 'month') {
+      renderMonthViewGrid(start, end, today);
+    } else {
+      clearCalendarBodyDynamicElements();
+      var totalDays = daysBetween(start, end) + 1;
+
+      // Month header
+      var monthHeader = el('calendarMonthHeader');
+      show(monthHeader);
+      clearEl(monthHeader);
+      var curMonth = -1;
+      var monthStartIdx = 0;
+      var months = [];
+      for (var d = 0; d < totalDays; d++) {
+        var date = addDays(start, d);
+        var m = date.getMonth();
+        if (m !== curMonth) {
+          if (curMonth !== -1) {
+            months.push({ label: MONTH_NAMES[curMonth] + ' ' + addDays(start, monthStartIdx).getFullYear(), span: d - monthStartIdx });
+          }
+          curMonth = m;
+          monthStartIdx = d;
+        }
+      }
+      months.push({ label: MONTH_NAMES[curMonth] + ' ' + addDays(start, monthStartIdx).getFullYear(), span: totalDays - monthStartIdx });
+
+      months.forEach(function (mo) {
+        var cell = create('div', { className: 'calendar-month-cell', textContent: mo.label });
+        cell.style.width = (mo.span * CELL_WIDTH) + 'px';
+        cell.style.minWidth = cell.style.width;
+        monthHeader.appendChild(cell);
+      });
+
+      // Day header
+      var dayHeader = el('calendarDayHeader');
+      show(dayHeader);
+      clearEl(dayHeader);
+      for (var d = 0; d < totalDays; d++) {
+        var date = addDays(start, d);
+        var cls = 'calendar-day-cell';
+        if (isWeekend(date)) cls += ' weekend';
+        if (isSameDay(date, today)) cls += ' today';
+        var cell = create('div', { className: cls, textContent: date.getDate() });
+        dayHeader.appendChild(cell);
+      }
+
+      // Grid lines
+      var gridLines = el('calendarGridLines');
+      show(gridLines);
+      clearEl(gridLines);
+      for (var d = 0; d < totalDays; d++) {
+        var date = addDays(start, d);
+        var cls = 'calendar-grid-line';
+        if (isWeekend(date)) cls += ' weekend';
+        if (isSameDay(date, today)) cls += ' today';
+        gridLines.appendChild(create('div', { className: cls }));
+      }
+
+      // Render blocks
+      renderBlocks(start, end, totalDays);
+    }
+  }
+
+  function renderMonthViewGrid(start, end, today) {
+    var body = el('calendarBody');
+    clearCalendarBodyDynamicElements();
+    
+    // Hide grid lines in DOM
+    var gridLines = el('calendarGridLines');
+    if (gridLines) hide(gridLines);
+    
+    var monthHeader = el('calendarMonthHeader');
+    if (monthHeader) hide(monthHeader);
+
+    // Render weekday headers starting from locale's first day of week
+    var firstDayOfWeek = getLocaleFirstDayOfWeek();
+    var weekdayNames = getLocaleWeekdayNames();
+    
     var dayHeader = el('calendarDayHeader');
+    show(dayHeader);
     clearEl(dayHeader);
-    for (var d = 0; d < totalDays; d++) {
-      var date = addDays(start, d);
-      var cls = 'calendar-day-cell';
-      if (isWeekend(date)) cls += ' weekend';
-      if (isSameDay(date, today)) cls += ' today';
-      var cell = create('div', { className: cls, textContent: date.getDate() });
+    for (var i = 0; i < 7; i++) {
+      var dayIndex = (firstDayOfWeek + i) % 7;
+      var name = weekdayNames[dayIndex];
+      var isWk = dayIndex === 0 || dayIndex === 6;
+      var cls = 'calendar-day-name-cell';
+      if (isWk) cls += ' weekend';
+      var cell = create('div', { className: cls, textContent: name });
       dayHeader.appendChild(cell);
     }
-
-    // Grid lines
-    var gridLines = el('calendarGridLines');
-    clearEl(gridLines);
-    for (var d = 0; d < totalDays; d++) {
-      var date = addDays(start, d);
-      var cls = 'calendar-grid-line';
-      if (isWeekend(date)) cls += ' weekend';
-      if (isSameDay(date, today)) cls += ' today';
-      gridLines.appendChild(create('div', { className: cls }));
+    
+    // Determine month boundaries and padding days
+    var firstOfMonth = new Date(start.getFullYear(), start.getMonth(), 1);
+    var firstDayIndex = firstOfMonth.getDay();
+    var padDays = (firstDayIndex - firstDayOfWeek + 7) % 7;
+    var gridStart = addDays(firstOfMonth, -padDays);
+    
+    var lastOfMonth = new Date(end.getFullYear(), end.getMonth() + 1, 0);
+    var totalDaysCovered = daysBetween(gridStart, lastOfMonth) + 1;
+    var totalGridDays = Math.ceil(totalDaysCovered / 7) * 7;
+    
+    // Render week rows
+    var totalWeeks = totalGridDays / 7;
+    for (var w = 0; w < totalWeeks; w++) {
+      var weekStart = addDays(gridStart, w * 7);
+      var weekEnd = addDays(weekStart, 6);
+      
+      var weekRow = create('div', { className: 'week-row' });
+      
+      // Render 7 background cells
+      var weekGridDays = create('div', { className: 'week-grid-days' });
+      for (var d = 0; d < 7; d++) {
+        var dayDate = addDays(weekStart, d);
+        var cls = 'week-day-cell';
+        if (isWeekend(dayDate)) cls += ' weekend';
+        if (isSameDay(dayDate, today)) cls += ' today';
+        if (dayDate.getMonth() !== start.getMonth()) cls += ' outside-month';
+        
+        var cell = create('div', { className: cls });
+        
+        // Day number label
+        var numContainer = create('div', { className: 'day-number-container' });
+        var numLabel = create('span', { className: 'day-number-label', textContent: dayDate.getDate() });
+        numContainer.appendChild(numLabel);
+        cell.appendChild(numContainer);
+        
+        weekGridDays.appendChild(cell);
+      }
+      weekRow.appendChild(weekGridDays);
+      
+      // Create week events container
+      var evContainer = create('div', { className: 'week-events-container' });
+      weekRow.appendChild(evContainer);
+      
+      body.appendChild(weekRow);
+      
+      // Render event blocks for this week row
+      renderMonthGridBlocksForWeek(evContainer, weekStart, weekEnd);
     }
+    
+    // Stack all blocks across the entire month grid after layout pass
+    setTimeout(restackMonthGridBlocks, 0);
+  }
 
-    // Render blocks
-    renderBlocks(start, end, totalDays);
+  function renderMonthGridBlocksForWeek(evContainer, weekStart, weekEnd) {
+    if (!APP.config.startDateField || !APP.config.endDateField) return;
+
+    var itemsInWeek = APP.items.filter(function (item) {
+      var s = parseDate(item[APP.config.startDateField]);
+      var e = parseDate(item[APP.config.endDateField]);
+      return s && e && s <= weekEnd && e >= weekStart;
+    }).map(function (item) {
+      return {
+        id: item.Id,
+        start: parseDate(item[APP.config.startDateField]),
+        end: parseDate(item[APP.config.endDateField]),
+        item: item
+      };
+    });
+
+    // Sort by start date, then duration, then ID
+    itemsInWeek.sort(function (a, b) {
+      var startDiff = a.start - b.start;
+      if (startDiff !== 0) return startDiff;
+      var durationA = a.end - a.start;
+      var durationB = b.end - b.start;
+      return durationB - durationA; // longer duration first
+    });
+
+    itemsInWeek.forEach(function (entry) {
+      var blockStart = entry.start < weekStart ? weekStart : entry.start;
+      var blockEnd = entry.end > weekEnd ? weekEnd : entry.end;
+      
+      var startOffset = daysBetween(weekStart, blockStart);
+      var spanDays = daysBetween(blockStart, blockEnd) + 1;
+      
+      var left = (startOffset * 14.285714);
+      var width = (spanDays * 14.285714);
+      
+      var colorClass = 'block-color-' + (entry.id % 8);
+      var block = create('div', {
+        className: 'calendar-block ' + colorClass,
+        'data-item-id': String(entry.id),
+        'data-start-day': String(startOffset),
+        'data-end-day': String(startOffset + spanDays - 1),
+        onClick: function (e) {
+          e.stopPropagation();
+          selectItem(entry.id);
+        }
+      });
+      block.style.left = left + '%';
+      block.style.width = 'calc(' + width + '% - 4px)';
+      
+      if (APP.selectedItemId === entry.id || APP.addingDatesForId === entry.id) {
+        block.classList.add('selected');
+        block.classList.add('expanded');
+      }
+      
+      // Render fields
+      var labelsContainer = null;
+      sortedMappings().forEach(function (mapping) {
+        var val = entry.item[mapping.internalName];
+        var valStr = formatFieldValue(val);
+        if (!valStr) return;
+        var span;
+        if (mapping.style === 'heading') {
+          span = create('span', { className: 'block-heading', textContent: valStr });
+          block.appendChild(span);
+        } else if (mapping.style === 'subheading') {
+          span = create('span', { className: 'block-subheading', textContent: valStr });
+          block.appendChild(span);
+        } else if (mapping.style === 'label') {
+          if (!labelsContainer) {
+            labelsContainer = create('div', { className: 'block-labels-row' });
+            block.appendChild(labelsContainer);
+          }
+          span = create('span', { className: 'block-label', textContent: valStr });
+          labelsContainer.appendChild(span);
+        } else {
+          span = create('span', { className: 'block-regular', textContent: valStr });
+          block.appendChild(span);
+        }
+      });
+      
+      evContainer.appendChild(block);
+    });
+  }
+
+  function restackMonthGridBlocks() {
+    var weekRows = document.querySelectorAll('.week-row');
+    weekRows.forEach(function (row) {
+      var blocks = Array.prototype.slice.call(row.querySelectorAll('.calendar-block'));
+      if (blocks.length === 0) {
+        var evCont = row.querySelector('.week-events-container');
+        if (evCont) evCont.style.minHeight = '50px';
+        return;
+      }
+      
+      blocks.sort(function (a, b) {
+        var startA = parseInt(a.getAttribute('data-start-day'), 10) || 0;
+        var startB = parseInt(b.getAttribute('data-start-day'), 10) || 0;
+        if (startA !== startB) return startA - startB;
+        var endA = parseInt(a.getAttribute('data-end-day'), 10) || 0;
+        var endB = parseInt(b.getAttribute('data-end-day'), 10) || 0;
+        return endB - endA; // longer span first
+      });
+      
+      var placed = [];
+      var maxBottom = 0;
+      
+      blocks.forEach(function (block) {
+        var startDay = parseInt(block.getAttribute('data-start-day'), 10) || 0;
+        var endDay = parseInt(block.getAttribute('data-end-day'), 10) || 0;
+        var measuredHeight = block.offsetHeight || 90;
+        
+        var topPos = 4;
+        var collision = true;
+        
+        while (collision) {
+          collision = false;
+          for (var i = 0; i < placed.length; i++) {
+            var p = placed[i];
+            var horizOverlap = (startDay <= p.endDay && endDay >= p.startDay);
+            if (horizOverlap) {
+              var pBottom = p.topPos + p.measuredHeight + 4;
+              if (topPos < pBottom && topPos + measuredHeight + 4 > p.topPos) {
+                topPos = pBottom;
+                collision = true;
+                break;
+              }
+            }
+          }
+        }
+        
+        block.style.top = topPos + 'px';
+        
+        placed.push({
+          startDay: startDay,
+          endDay: endDay,
+          topPos: topPos,
+          measuredHeight: measuredHeight
+        });
+        
+        var bottom = topPos + measuredHeight;
+        if (bottom > maxBottom) maxBottom = bottom;
+      });
+      
+      var evCont = row.querySelector('.week-events-container');
+      if (evCont) {
+        evCont.style.minHeight = (maxBottom + 10) + 'px';
+      }
+    });
   }
 
   function renderBlocks(calStart, calEnd, totalDays) {
@@ -2468,6 +2974,11 @@ body { display: flex; flex-direction: column; overflow: hidden; }
   }
 
   function restackBlocks() {
+    if (APP.currentView === 'month') {
+      restackMonthGridBlocks();
+      return;
+    }
+
     var blockEntries = APP._blockEntries;
     if (!blockEntries || blockEntries.length === 0) return;
 
@@ -3006,16 +3517,15 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 
   // ===== Calendar Navigation =====
   function navigateMonth(delta) {
-    APP.calendarStartDate = new Date(
-      APP.calendarStartDate.getFullYear(),
-      APP.calendarStartDate.getMonth() + delta,
-      1
-    );
-    APP.calendarEndDate = new Date(
-      APP.calendarStartDate.getFullYear(),
-      APP.calendarStartDate.getMonth() + 2,
-      0
-    );
+    var start = APP.calendarStartDate || new Date();
+    var nextMonth = start.getMonth() + delta;
+    APP.calendarStartDate = new Date(start.getFullYear(), nextMonth, 1);
+    
+    if (APP.currentView === 'month') {
+      APP.calendarEndDate = new Date(start.getFullYear(), nextMonth + 1, 0);
+    } else {
+      APP.calendarEndDate = new Date(start.getFullYear(), nextMonth + 2, 0);
+    }
     renderCalendar();
     renderCards();
   }
@@ -3023,10 +3533,17 @@ body { display: flex; flex-direction: column; overflow: hidden; }
   function goToToday() {
     var now = new Date();
     APP.calendarStartDate = new Date(now.getFullYear(), now.getMonth(), 1);
-    APP.calendarEndDate = new Date(now.getFullYear(), now.getMonth() + 2, 0);
+    
+    if (APP.currentView === 'month') {
+      APP.calendarEndDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    } else {
+      APP.calendarEndDate = new Date(now.getFullYear(), now.getMonth() + 2, 0);
+    }
     renderCalendar();
     renderCards();
-    scrollToToday();
+    if (APP.currentView === 'timeline') {
+      scrollToToday();
+    }
   }
 
   // ===== Multi-User Polling =====
@@ -3199,6 +3716,10 @@ body { display: flex; flex-direction: column; overflow: hidden; }
       el('mainContainer').classList.remove('mobile-calendar');
       el('mainContainer').classList.add('mobile-list');
     });
+
+    // Calendar View Switcher toggles
+    el('btnViewMonthGrid').addEventListener('click', function () { setView('month'); });
+    el('btnViewTimeline').addEventListener('click', function () { setView('timeline'); });
 
     // Calendar navigation
     el('btnPrevMonth').addEventListener('click', function () { navigateMonth(-1); });
