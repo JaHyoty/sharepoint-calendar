@@ -731,10 +731,11 @@ body { display: flex; flex-direction: column; overflow: hidden; }
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.field-table th:nth-child(1) { width: 30%; }
+.field-table th:nth-child(1) { width: 25%; }
 .field-table th:nth-child(2) { width: 15%; }
-.field-table th:nth-child(3) { width: 25%; }
-.field-table th:nth-child(4) { width: 30%; }
+.field-table th:nth-child(3) { width: 20%; }
+.field-table th:nth-child(4) { width: 25%; }
+.field-table th:nth-child(5) { width: 15%; }
 .field-table td {
   padding: 5px 8px;
   border-bottom: 1px solid var(--color-border);
@@ -1501,9 +1502,9 @@ body { display: flex; flex-direction: column; overflow: hidden; }
       .then(function (data) {
         var d = data && data.d ? data.d : {};
         var perms = d.EffectiveBasePermissions || d;
-        var high = perms.High || 0;
-        // AddListItems permission = bit 1 in the High word
-        APP.hasContribute = (high & 2) !== 0;
+        var low = perms.Low || 0;
+        // AddListItems permission = bit 1 in the Low word
+        APP.hasContribute = (low & 2) !== 0;
       })
       .catch(function () {
         // Fallback: try folder-level check on the library where this file lives
@@ -1512,8 +1513,8 @@ body { display: flex; flex-direction: column; overflow: hidden; }
           .then(function (data) {
             var d = data && data.d ? data.d : {};
             var perms = d.EffectiveBasePermissions || d;
-            var high = perms.High || 0;
-            APP.hasContribute = (high & 2) !== 0;
+            var low = perms.Low || 0;
+            APP.hasContribute = (low & 2) !== 0;
           })
           .catch(function () {
             // Final fallback: practical test - if we can get a request digest,
@@ -1709,7 +1710,10 @@ body { display: flex; flex-direction: column; overflow: hidden; }
         endDateField: cfg.endDateField || null,
         pageTitle: cfg.pageTitle || 'SharePoint Calendar',
         entityType: cfg.entityType || '',
-        itemLimit: parseInt(cfg.itemLimit, 10) || 5000
+        itemLimit: parseInt(cfg.itemLimit, 10) || 5000,
+        colorBaseField: cfg.colorBaseField || null,
+        colorBaseFieldType: cfg.colorBaseFieldType || null,
+        colorMap: cfg.colorMap || null
       };
       return true;
     }
@@ -1764,8 +1768,49 @@ body { display: flex; flex-direction: column; overflow: hidden; }
     pageTitle: '',
     entityType: '',
     hasDateFields: false,
-    itemLimit: 5000
+    itemLimit: 5000,
+    colorBaseField: null,
+    colorBaseFieldType: null,
+    colorMap: null,
+    uniqueValues: []
   };
+
+  var PRESET_COLORS = [
+    '#0078D4', // Royal Blue
+    '#D13438', // Crimson Red
+    '#107C10', // Forest Green
+    '#FF8F00', // Warm Amber
+    '#8764B8', // Royal Purple
+    '#CA5010', // Vibrant Orange
+    '#00B7C3', // Bright Teal
+    '#E3008C', // Deep Pink
+    '#8E562E', // Warm Brown
+    '#004B87', // Navy Blue
+    '#498205', // Olive Green
+    '#881794', // Rich Violet
+    '#D69E2E', // Warm Gold
+    '#005B70', // Dark Teal
+    '#9E1C3F', // Crimson Rose
+    '#605E5C'  // Slate Gray
+  ];
+
+  function getUniqueValuesForField(items, fieldName) {
+    var uniqueSet = {};
+    items.forEach(function (item) {
+      var val = item[fieldName];
+      if (val == null || val === '') return;
+      var strVal = formatFieldValue(val);
+      if (strVal && strVal.trim()) {
+        uniqueSet[strVal.trim()] = true;
+      }
+    });
+    return Object.keys(uniqueSet);
+  }
+
+  function getFieldTitle(fieldName) {
+    var field = setupData.fields.find(function (f) { return f.InternalName === fieldName; });
+    return field ? field.Title : fieldName;
+  }
 
   function showSetup() {
     setupStep = 0;
@@ -1784,6 +1829,14 @@ body { display: flex; flex-direction: column; overflow: hidden; }
       setupData.pageTitle = APP.config.pageTitle || '';
       setupData.entityType = APP.config.entityType || '';
       setupData.itemLimit = APP.config.itemLimit || 5000;
+      setupData.colorBaseField = APP.config.colorBaseField || null;
+      setupData.colorBaseFieldType = APP.config.colorBaseFieldType || null;
+      setupData.colorMap = APP.config.colorMap ? Object.assign({}, APP.config.colorMap) : null;
+    } else {
+      setupData.colorBaseField = null;
+      setupData.colorBaseFieldType = null;
+      setupData.colorMap = null;
+      setupData.uniqueValues = [];
     }
 
     var overlay = create('div', { className: 'setup-overlay', id: 'setupOverlay' });
@@ -1793,7 +1846,7 @@ body { display: flex; flex-direction: column; overflow: hidden; }
     var h2 = create('h2', { id: 'setupTitle', textContent: 'Setup Calendar' });
     var p = create('p', { id: 'setupSubtitle', textContent: 'Connect to a SharePoint list to get started.' });
     var dots = create('div', { className: 'setup-steps', id: 'setupDots' });
-    for (var i = 0; i < 3; i++) {
+    for (var i = 0; i < 4; i++) {
       dots.appendChild(create('div', { className: 'setup-step-dot' + (i === 0 ? ' active' : ''), 'data-step': String(i) }));
     }
     header.appendChild(h2);
@@ -1846,10 +1899,15 @@ body { display: flex; flex-direction: column; overflow: hidden; }
       if (i < setupStep) dots[i].classList.add('completed');
       if (i === setupStep) dots[i].classList.add('active');
     }
+    // If color base is not selected and we are on step 3, mark step 2 dot as completed
+    if (setupStep === 3 && !setupData.colorBaseField) {
+      if (dots[2]) dots[2].classList.add('completed');
+    }
 
     if (setupStep === 0) renderSetupStep1(body, footer);
     else if (setupStep === 1) renderSetupStep2(body, footer);
-    else if (setupStep === 2) renderSetupStep3(body, footer);
+    else if (setupStep === 2) renderSetupStep2ColorConfig(body, footer);
+    else if (setupStep === 3) renderSetupStep3(body, footer);
   }
 
   // ----- Step 1: Connect to List -----
@@ -2100,8 +2158,12 @@ body { display: flex; flex-direction: column; overflow: hidden; }
     var table = create('table', { className: 'field-table' });
     var thead = create('thead');
     var hrow = create('tr');
-    ['Field Name', 'Type', 'Sample Value', 'Category'].forEach(function (h) {
-      hrow.appendChild(create('th', { textContent: h }));
+    ['Field Name', 'Type', 'Sample Value', 'Category', 'Color Base'].forEach(function (h) {
+      var th = create('th', { textContent: h });
+      if (h === 'Color Base') {
+        th.style.textAlign = 'center';
+      }
+      hrow.appendChild(th);
     });
     thead.appendChild(hrow);
     table.appendChild(thead);
@@ -2146,6 +2208,28 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 
       catTd.appendChild(catSelect);
       tr.appendChild(catTd);
+
+      // Color Base checkbox
+      var cbTd = create('td', { style: 'text-align:center;' });
+      var cbInput = create('input', {
+        type: 'checkbox',
+        className: 'color-base-checkbox',
+        'data-field': field.InternalName,
+        onChange: function (e) {
+          if (e.target.checked) {
+            document.querySelectorAll('.color-base-checkbox').forEach(function (other) {
+              if (other !== e.target) other.checked = false;
+            });
+          }
+        }
+      });
+      if (setupData.colorBaseField === field.InternalName) {
+        cbInput.checked = true;
+      } else if (!setupData.colorBaseField && APP.config && APP.config.colorBaseField === field.InternalName) {
+        cbInput.checked = true;
+      }
+      cbTd.appendChild(cbInput);
+      tr.appendChild(cbTd);
 
       tbody.appendChild(tr);
     });
@@ -2261,8 +2345,120 @@ body { display: flex; flex-direction: column; overflow: hidden; }
     setupData.startDateField = startField;
     setupData.endDateField = endField;
 
-    setupStep = 2;
-    renderSetupStep();
+    var colorBaseField = null;
+    var cbCheckboxes = document.querySelectorAll('.color-base-checkbox');
+    cbCheckboxes.forEach(function (cb) {
+      if (cb.checked) {
+        colorBaseField = cb.getAttribute('data-field');
+      }
+    });
+
+    setupData.colorBaseField = colorBaseField;
+    if (colorBaseField) {
+      clearEl(errEl);
+      var spinner = create('div', { className: 'msg-info', style: 'display:flex;align-items:center;gap:8px;' }, [
+        create('span', { className: 'spinner', style: 'width:14px;height:14px;border-width:2px;' }),
+        'Analyzing field values and assigning colors...'
+      ]);
+      errEl.appendChild(spinner);
+
+      var listApiUrl = setupData.listUrl;
+      var expandParam = '';
+      var fieldObj = setupData.fields.find(function (f) { return f.InternalName === colorBaseField; });
+      if (fieldObj && (fieldObj.TypeAsString === 'User' || fieldObj.TypeAsString === 'UserMulti' || fieldObj.TypeAsString === 'Lookup' || fieldObj.TypeAsString === 'LookupMulti')) {
+        expandParam = '&$select=*,' + colorBaseField + '/Title&$expand=' + colorBaseField;
+      }
+
+      spGet(listApiUrl + "/items?$top=500" + expandParam)
+        .then(function (data) {
+          var items = data && data.d && data.d.results ? data.d.results : [];
+          var uniqueVals = getUniqueValuesForField(items, colorBaseField);
+          
+          var newColorMap = {};
+          var existingMap = setupData.colorMap || (APP.config && APP.config.colorMap) || {};
+          var existingBase = APP.config && APP.config.colorBaseField;
+
+          uniqueVals.forEach(function (val, idx) {
+            if (colorBaseField === existingBase && existingMap[val]) {
+              newColorMap[val] = existingMap[val];
+            } else {
+              newColorMap[val] = PRESET_COLORS[idx % PRESET_COLORS.length];
+            }
+          });
+
+          setupData.uniqueValues = uniqueVals;
+          setupData.colorMap = newColorMap;
+
+          setupStep = 2;
+          renderSetupStep();
+        })
+        .catch(function (err) {
+          clearEl(errEl);
+          errEl.appendChild(create('div', { className: 'msg-error', textContent: 'Failed to retrieve list items for color mapping. Please try again.' }));
+        });
+    } else {
+      setupData.colorMap = null;
+      setupData.uniqueValues = [];
+      setupStep = 3;
+      renderSetupStep();
+    }
+  }
+
+  // ----- Step 2.5 (New Step 2): Color Configuration -----
+  function renderSetupStep2ColorConfig(body, footer) {
+    el('setupTitle').textContent = 'Configure Colors';
+    el('setupSubtitle').textContent = 'Customize colors for each unique value in the "' + getFieldTitle(setupData.colorBaseField) + '" field.';
+
+    var wrapper = create('div', { 
+      style: 'max-height:300px;overflow-y:auto;overflow-x:hidden;border:1px solid var(--color-border);border-radius:var(--radius-md);padding:16px;background:var(--color-bg);' 
+    });
+
+    if (!setupData.uniqueValues || setupData.uniqueValues.length === 0) {
+      wrapper.appendChild(create('div', { className: 'msg-info', textContent: 'No unique values found in the selected field. You can proceed, and colors will be assigned dynamically as items are added.' }));
+    } else {
+      var grid = create('div', { 
+        style: 'display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;' 
+      });
+
+      setupData.uniqueValues.forEach(function (val) {
+        var label = create('span', { 
+          textContent: val, 
+          style: 'font-weight:500;font-size:13px;color:var(--color-text);text-overflow:ellipsis;overflow:hidden;white-space:nowrap;' 
+        });
+        
+        var picker = create('input', {
+          type: 'color',
+          className: 'color-picker-input',
+          value: setupData.colorMap[val] || '#0078d4',
+          style: 'width:48px;height:32px;border:1px solid var(--color-border);border-radius:var(--radius-sm);cursor:pointer;padding:2px;background:transparent;',
+          onChange: function (e) {
+            setupData.colorMap[val] = e.target.value;
+          }
+        });
+
+        grid.appendChild(label);
+        grid.appendChild(picker);
+      });
+
+      wrapper.appendChild(grid);
+    }
+
+    body.appendChild(wrapper);
+
+    // Footer buttons
+    var btnBack = create('button', {
+      className: 'btn btn-ghost',
+      textContent: '\u2190 Back',
+      onClick: function () { setupStep = 1; renderSetupStep(); }
+    });
+    var btnNext = create('button', {
+      className: 'btn btn-primary',
+      textContent: 'Next \u2192',
+      onClick: function () { setupStep = 3; renderSetupStep(); }
+    });
+
+    footer.appendChild(btnBack);
+    footer.appendChild(btnNext);
   }
 
   // ----- Step 3: Page Title & Confirm -----
@@ -2328,7 +2524,14 @@ body { display: flex; flex-direction: column; overflow: hidden; }
     var btnBack = create('button', {
       className: 'btn btn-ghost',
       textContent: '\u2190 Back',
-      onClick: function () { setupStep = 1; renderSetupStep(); }
+      onClick: function () {
+        if (setupData.colorBaseField) {
+          setupStep = 2;
+        } else {
+          setupStep = 1;
+        }
+        renderSetupStep();
+      }
     });
     var btnSave = create('button', {
       className: 'btn btn-primary',
@@ -2347,6 +2550,12 @@ body { display: flex; flex-direction: column; overflow: hidden; }
     setupData.pageTitle = title;
     setupData.itemLimit = limit;
 
+    var colorBaseFieldType = null;
+    if (setupData.colorBaseField) {
+      var fieldObj = setupData.fields.find(function (f) { return f.InternalName === setupData.colorBaseField; });
+      if (fieldObj) colorBaseFieldType = fieldObj.TypeAsString;
+    }
+
     // Build config
     APP.config = {
       listUrl: setupData.listUrl,
@@ -2358,7 +2567,10 @@ body { display: flex; flex-direction: column; overflow: hidden; }
       endDateField: setupData.endDateField,
       pageTitle: title,
       entityType: setupData.entityType,
-      itemLimit: limit
+      itemLimit: limit,
+      colorBaseField: setupData.colorBaseField || null,
+      colorBaseFieldType: colorBaseFieldType || null,
+      colorMap: setupData.colorMap || null
     };
 
     // Prune existing SETUP_CONFIG rows to keep log file size small and compact
@@ -2381,6 +2593,9 @@ body { display: flex; flex-direction: column; overflow: hidden; }
     appendCSVRow('SETUP_CONFIG', '', 'pageTitle', JSON.stringify(APP.config.pageTitle), '');
     appendCSVRow('SETUP_CONFIG', '', 'entityType', JSON.stringify(APP.config.entityType), '');
     appendCSVRow('SETUP_CONFIG', '', 'itemLimit', JSON.stringify(APP.config.itemLimit), '');
+    appendCSVRow('SETUP_CONFIG', '', 'colorBaseField', JSON.stringify(APP.config.colorBaseField), '');
+    appendCSVRow('SETUP_CONFIG', '', 'colorBaseFieldType', JSON.stringify(APP.config.colorBaseFieldType), '');
+    appendCSVRow('SETUP_CONFIG', '', 'colorMap', JSON.stringify(APP.config.colorMap), '');
 
     showSaving();
     saveCSV().then(function () {
@@ -2505,6 +2720,14 @@ body { display: flex; flex-direction: column; overflow: hidden; }
         if (expandFields.indexOf(m.internalName) === -1) expandFields.push(m.internalName);
       }
     });
+    if (APP.config.colorBaseField && APP.config.colorBaseFieldType) {
+      var t = APP.config.colorBaseFieldType;
+      if (t === 'User' || t === 'UserMulti' || t === 'Lookup' || t === 'LookupMulti') {
+        if (expandFields.indexOf(APP.config.colorBaseField) === -1) {
+          expandFields.push(APP.config.colorBaseField);
+        }
+      }
+    }
     var expandSelectParam = '';
     if (expandFields.length > 0) {
       var selectParts = ['*'];
@@ -2767,8 +2990,23 @@ body { display: flex; flex-direction: column; overflow: hidden; }
       var width = (spanDays * 14.285714);
       
       var colorClass = 'block-color-' + (entry.id % 8);
+      var customBg = null;
+      if (APP.config && APP.config.colorBaseField && APP.config.colorMap) {
+        var rawVal = entry.item[APP.config.colorBaseField];
+        var strVal = formatFieldValue(rawVal);
+        if (strVal && strVal.trim()) {
+          var trimmedVal = strVal.trim();
+          customBg = APP.config.colorMap[trimmedVal];
+          if (!customBg) {
+            var numKeys = Object.keys(APP.config.colorMap).length;
+            customBg = PRESET_COLORS[numKeys % PRESET_COLORS.length];
+            APP.config.colorMap[trimmedVal] = customBg;
+          }
+        }
+      }
+
       var block = create('div', {
-        className: 'calendar-block ' + colorClass,
+        className: 'calendar-block ' + (customBg ? '' : colorClass),
         'data-item-id': String(entry.id),
         'data-start-day': String(startOffset),
         'data-end-day': String(startOffset + spanDays - 1),
@@ -2778,6 +3016,10 @@ body { display: flex; flex-direction: column; overflow: hidden; }
         }
       });
       block.style.left = left + '%';
+      if (customBg) {
+        block.style.backgroundColor = customBg;
+        block.style.color = '#ffffff';
+      }
       block.style.width = 'calc(' + width + '% - 4px)';
       
       if (APP.selectedItemId === entry.id || APP.addingDatesForId === entry.id) {
@@ -2923,12 +3165,31 @@ body { display: flex; flex-direction: column; overflow: hidden; }
       var width = spanDays * CELL_WIDTH - 2;
 
       var colorClass = 'block-color-' + (entry.id % 8);
+      var customBg = null;
+      if (APP.config && APP.config.colorBaseField && APP.config.colorMap) {
+        var rawVal = entry.item[APP.config.colorBaseField];
+        var strVal = formatFieldValue(rawVal);
+        if (strVal && strVal.trim()) {
+          var trimmedVal = strVal.trim();
+          customBg = APP.config.colorMap[trimmedVal];
+          if (!customBg) {
+            var numKeys = Object.keys(APP.config.colorMap).length;
+            customBg = PRESET_COLORS[numKeys % PRESET_COLORS.length];
+            APP.config.colorMap[trimmedVal] = customBg;
+          }
+        }
+      }
+
       var block = create('div', {
-        className: 'calendar-block ' + colorClass,
+        className: 'calendar-block ' + (customBg ? '' : colorClass),
         'data-item-id': String(entry.id),
         onClick: function () { selectItem(entry.id); }
       });
       block.style.left = left + 'px';
+      if (customBg) {
+        block.style.backgroundColor = customBg;
+        block.style.color = '#ffffff';
+      }
       block.style.width = width + 'px';
 
       if (APP.selectedItemId === entry.id || APP.addingDatesForId === entry.id) {
@@ -3250,7 +3511,7 @@ body { display: flex; flex-direction: column; overflow: hidden; }
       // Read-only indicator
       if (isOnCalendar) {
         var badge = create('div', { className: 'card-action' });
-        badge.appendChild(create('span', { className: 'btn btn-ghost btn-sm', textContent: '📅 On Calendar', style: 'cursor:default;' }));
+        badge.appendChild(create('span', { className: 'btn btn-ghost btn-sm', textContent: '\uD83D\uDCC5 On Calendar', style: 'cursor:default;' }));
         card.appendChild(badge);
       }
     }
